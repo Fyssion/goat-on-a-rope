@@ -2,8 +2,8 @@ use fraction::Fraction;
 
 #[derive(Debug)]
 pub struct Circle {
-    radius: Fraction,
-    angle: Fraction,
+    pub radius: Fraction,
+    pub angle: Fraction,
 }
 
 impl Circle {

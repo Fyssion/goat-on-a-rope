@@ -1,7 +1,8 @@
 use crate::circle::Circle;
 use eframe::{egui, epi};
-// use egui::epaint::PathShape;
+use egui::epaint::PathShape;
 use fraction::{Fraction, GenericDecimal};
+use std::f32::consts::PI;
 
 type Decimal = GenericDecimal<u64, u8>;
 
@@ -10,7 +11,7 @@ type Decimal = GenericDecimal<u64, u8>;
 #[cfg_attr(feature = "persistence", serde(default))] // if we add new fields, give them default values when deserializing old state
 pub struct App {
     sides: u32,
-    position: f64,
+    position: f32,
     // // this how you opt-out of serialization of a member
     // #[cfg_attr(feature = "persistence", serde(skip))]
     // value: f32,
@@ -53,10 +54,8 @@ impl epi::App for App {
     }
 
     /// Called each time the UI needs repainting, which may be many times per second.
-    /// Put your widgets into a `SidePanel`, `TopPanel`, `CentralPanel`, `Window` or `Area`.
+    /// Put your widgets into a `Sf32::consts::PIu.
     fn update(&mut self, ctx: &egui::Context, _frame: &epi::Frame) {
-        // Examples of how to create different panels and windows.
-        // Pick whichever suits you.
         // Tip: a good default choice is to just keep the `CentralPanel`.
         // For inspiration and more examples, go to https://emilk.github.io/egui
 
@@ -118,6 +117,13 @@ impl epi::App for App {
             ui.label(format!("Decimal: {:.5}", Decimal::from_fraction(area)));
 
             ui.separator();
+
+            // egui::Frame::canvas(ui.style()).show(ui, |ui| {
+            //     self.draw_graphic(ui);
+            // });
+            self.draw_graphic(ui);
+
+            ui.separator();
             egui::warn_if_debug_build(ui);
         });
     }
@@ -142,5 +148,42 @@ impl App {
             circles.push(circle);
             radius -= side_length;
         }
+    }
+
+    pub fn draw_graphic(&mut self, ui: &mut egui::Ui) -> egui::Response {
+        let (response, painter) =
+            ui.allocate_painter(egui::Vec2::new(ui.available_width(), 300.0), egui::Sense::hover());
+
+        self.paint_polygon(&painter, self.sides);
+
+        response
+    }
+
+    pub fn paint_polygon(&self, painter: &egui::Painter, sides: u32) {
+        let stroke = egui::Stroke::new(1.0, egui::Color32::from_rgb(25, 200, 100));
+        let mut points: Vec<egui::Pos2> = Vec::new();
+
+        let outside_angle = 360.0 / self.sides as f32;
+
+        let center = egui::pos2(150.0, 300.0);
+        let mut angle = 90.0;
+
+        for _ in 0..=sides {
+            let point = self.calculate_other_point(center, angle, 75.0);
+            points.push(point);
+            angle += outside_angle;
+        }
+
+        painter.add(PathShape::line(points, stroke));
+    }
+
+    fn calculate_other_point(&self, original: egui::Pos2, angle: f32, distance: f32) -> egui::Pos2 {
+        let angle_rad = App::to_rad(angle);
+        let diff = egui::vec2(distance * angle_rad.cos(), distance * angle_rad.sin());
+        original + diff
+    }
+
+    fn to_rad(angle: f32) -> f32 {
+        angle * (PI / 180.0)
     }
 }
