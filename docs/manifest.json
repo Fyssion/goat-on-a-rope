@@ -1,0 +1,18 @@
+{
+    "name": "Goat on a Rope",
+    "short_name": "goat-rope",
+    "description": "Goat on a Rope",
+    "icons": [
+      {
+        "src": "goat.png",
+        "sizes": "192x192",
+        "type": "image/png"
+      }
+    ],
+    "lang": "en-US",
+    "id": "/index.html",
+    "start_url": "./index.html",
+    "display": "standalone",
+    "background_color": "white",
+    "theme_color": "white"
+  }
