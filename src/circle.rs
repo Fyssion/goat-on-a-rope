@@ -1,28 +1,29 @@
-#[cfg_attr(feature = "persistence", derive(serde::Deserialize, serde::Serialize))]
+use fraction::Fraction;
+
 #[derive(Debug)]
 pub struct Circle {
-    radius: f64,
-    angle: f64,
+    radius: Fraction,
+    angle: Fraction,
 }
 
 impl Circle {
-    pub fn full(radius: f64) -> Circle {
+    pub fn full(radius: Fraction) -> Circle {
         Circle {
             radius,
-            angle: 360.0,
+            angle: Fraction::from(360),
         }
     }
 
-    pub fn partial(radius: f64, angle: f64) -> Circle {
+    pub fn partial(radius: Fraction, angle: Fraction) -> Circle {
         Circle { radius, angle }
     }
 
     /// Returns the area in terms of Pi
-    pub fn area(&self) -> f64 {
+    pub fn area(&self) -> Fraction {
         self.partial_area(self.angle)
     }
 
-    pub fn partial_area(&self, angle: f64) -> f64 {
-        self.radius.powf(2.0) * (angle / 360.0)
+    pub fn partial_area(&self, angle: Fraction) -> Fraction {
+        (self.radius * self.radius) * (angle / Fraction::from(360))
     }
 }

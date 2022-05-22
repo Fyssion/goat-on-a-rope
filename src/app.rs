@@ -1,6 +1,9 @@
 use crate::circle::Circle;
 use eframe::{egui, epi};
-use fraction::Fraction;
+// use egui::epaint::PathShape;
+use fraction::{Fraction, GenericDecimal};
+
+type Decimal = GenericDecimal<u64, u8>;
 
 // We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[cfg_attr(feature = "persistence", derive(serde::Deserialize, serde::Serialize))]
@@ -79,31 +82,31 @@ impl epi::App for App {
             ui.add(egui::Slider::new(&mut self.sides, 3..=20).text("sides"));
             ui.add(egui::Slider::new(&mut self.position, 0.0..=1.0).text("position"));
 
-            let outside_angle = 360.0 / (self.sides as f64);
-            let inside_angle = 180.0 - outside_angle;
+            let outside_angle = Fraction::from(360) / Fraction::from(self.sides);
+            let inside_angle = Fraction::from(180) - outside_angle;
 
             let on_vertex = self.position == 0.0 || self.position == 1.0;
             let initial_angle = if on_vertex {
-                360.0 - inside_angle
+                Fraction::from(360) - inside_angle
             } else {
-                180.0
+                Fraction::from(180)
             };
 
             println!("Calculating");
 
-            println!("Pushing circle {:?}", Circle::partial(1.0, initial_angle));
-            let mut circles = vec![Circle::partial(1.0, initial_angle)];
+            println!("Pushing circle {:?}", Circle::partial(Fraction::from(1), initial_angle));
+            let mut circles = vec![Circle::partial(Fraction::from(1), initial_angle)];
 
             if on_vertex {
                 println!("Calculating left side");
-                self.calculate_circles(&mut circles, 1.0);
+                self.calculate_circles(&mut circles, Fraction::from(1));
                 println!("Calculating right side");
-                self.calculate_circles(&mut circles, 1.0);
+                self.calculate_circles(&mut circles, Fraction::from(1));
             } else {
-                self.calculate_circles(&mut circles, self.position);
-                self.calculate_circles(&mut circles, 1.0 - self.position);
+                self.calculate_circles(&mut circles, Fraction::from(self.position));
+                self.calculate_circles(&mut circles, Fraction::from(1) - Fraction::from(self.position));
             }
-            let mut area = 0.0;
+            let mut area = Fraction::from(0);
             let circle_count = circles.len();
 
             for circle in circles {
@@ -112,7 +115,7 @@ impl epi::App for App {
 
             ui.label(format!("Circles: {}", circle_count));
             ui.label(format!("Area: {}", area));
-            ui.label(format!("Fraction attempt: {}", Fraction::from(area)));
+            ui.label(format!("Decimal: {:.5}", Decimal::from_fraction(area)));
 
             ui.separator();
             egui::warn_if_debug_build(ui);
@@ -121,23 +124,23 @@ impl epi::App for App {
 }
 
 impl App {
-    pub fn calculate_circles(&self, circles: &mut Vec<Circle>, position: f64) {
-        let outside_angle = 360.0 / (self.sides as f64);
-        let side_length = 2.0 / self.sides as f64;
+    pub fn calculate_circles(&self, circles: &mut Vec<Circle>, position: Fraction) {
+        let outside_angle = Fraction::from(360) / Fraction::from(self.sides);
+        let side_length = Fraction::from(2) / Fraction::from(self.sides);
 
-        let mut radius = 1.0 - (position * (side_length as f64));
+        let mut radius = Fraction::from(1) - (position * side_length);
         let circle = Circle::partial(radius, outside_angle);
         println!("Pushing circle {:?}", circle);
         circles.push(circle);
-        radius -= side_length as f64;
+        radius -= side_length;
 
         println!("Side length: {} | Radius: {}", side_length, radius);
 
-        while radius > 0.0 {
+        while radius > Fraction::from(0) {
             let circle = Circle::partial(radius, outside_angle);
             println!("Pushing circle {:?}", circle);
             circles.push(circle);
-            radius -= side_length as f64;
+            radius -= side_length;
         }
     }
 }
