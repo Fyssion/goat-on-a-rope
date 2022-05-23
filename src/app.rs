@@ -3,6 +3,7 @@ use eframe::{egui, epi};
 use egui::epaint::{CircleShape, PathShape};
 use fraction::{Fraction, GenericDecimal};
 use std::f32::consts::PI;
+use std::f64::consts::TAU;
 
 type Decimal = GenericDecimal<u64, u8>;
 
@@ -183,7 +184,11 @@ impl App {
         let side_length = 50.0 * App::to_rad(outside_angle).sin() / App::to_rad(inside_angle / 2.0).sin();
         let starting_point = self.calculate_other_point(vertices[0], outside_angle, -side_length * self.position);
         let radius = side_length * self.sides as f32 / 2.0;
-        let first_circle = CircleShape::stroke(starting_point, radius, stroke);
+        let angle = *circles[0].angle.numer().unwrap() as f32 / *circles[0].angle.denom().unwrap() as f32;
+        // let first_circle = CircleShape::stroke(starting_point, radius, stroke);
+        println!("Angle {}", self.add_angle(-90.0, 150.0));
+        let first_circle = self.circle(starting_point, radius, self.add_angle(90.0, -angle / 2.0), self.add_angle(90.0, angle / 2.0));
+        // let first_circle = self.circle(starting_point, radius, 300.0, 90.0);
         painter.add(first_circle);
 
         let center = egui::pos2(200.0, 300.0);
@@ -193,10 +198,13 @@ impl App {
 
         for circle in (&circles[1..=left_count as usize]).iter() {
             angle -= outside_angle;
+            let part = *circle.angle.numer().unwrap() as f32 / *circle.angle.denom().unwrap() as f32;
             let point = self.calculate_other_point(center, angle, 50.0);
             let new_radius = (*circle.radius.numer().unwrap() as f32 / *circle.radius.denom().unwrap() as f32) * radius;
-            println!("Radius {}", new_radius);
-            let shape = CircleShape::stroke(point, new_radius, stroke);
+            println!("Radius {} Angle {} Part {}", new_radius, angle, part);
+            // let shape = CircleShape::stroke(point, new_radius, stroke);
+            // let shape = self.circle(point, new_radius, self.add_angle(360.0 + angle - 30.0, -part), 360.0 + angle - 30.0);
+            let shape = self.circle(point, new_radius, 0.0, 360.0);
             painter.add(shape);
         }
 
@@ -211,7 +219,8 @@ impl App {
             let point = self.calculate_other_point(center, angle, 50.0);
             let new_radius = (*circle.radius.numer().unwrap() as f32 / *circle.radius.denom().unwrap() as f32) * radius;
             println!("Radius {}", new_radius);
-            let shape = CircleShape::stroke(point, new_radius, stroke);
+            // let shape = CircleShape::stroke(point, new_radius, stroke);
+            let shape = self.circle(point, new_radius, 0.0, 360.0);
             painter.add(shape);
             if !on_vertex { angle += outside_angle; }
         }
@@ -247,5 +256,50 @@ impl App {
 
     fn to_rad(angle: f32) -> f32 {
         angle * (PI / 180.0)
+    }
+
+    fn circle(&self, center: egui::Pos2, radius: f32, start_angle: f32, end_angle: f32) -> PathShape {
+        let stroke = egui::Stroke::new(1.0, egui::Color32::RED.linear_multiply(0.25));
+        let n = 512;
+        let start = ((start_angle / 360.0) * n as f32) as usize;
+        let end = ((end_angle / 360.0) * n as f32) as usize;
+        let range;
+        if start_angle > end_angle {
+            let mut first = (start as usize..=512).collect::<Vec<_>>();
+            let second = (0..=end as usize).collect::<Vec<_>>();
+            first.extend(second);
+            range = first;
+        } else {
+            range = ((start as usize)..=(end as usize)).collect::<Vec<_>>();
+        }
+        // let circle: Vec<egui::Pos2> = (start..=end).map(|i| {
+        //     let t = egui::remap(i as f64, 0.0..=(n as f64), 0.0..=TAU);
+        //     let r = radius as f64;
+        //     egui::pos2(
+        //         (r * t.cos() + center.x as f64) as f32,
+        //         (r * t.sin() + center.y as f64)  as f32,
+        //     )
+        // }).collect();
+        let mut circle: Vec<egui::Pos2> = Vec::new();
+        for i in range {
+            let t = egui::remap(i as f64, 0.0..=(n as f64), 0.0..=TAU);
+            // println!("t {}", t);
+            let r = radius as f64;
+            circle.push(egui::pos2(
+                (r * t.cos() + center.x as f64) as f32,
+                (r * t.sin() + center.y as f64)  as f32,
+            ));
+        }
+        PathShape::line(circle, stroke)
+    }
+
+    fn add_angle(&self, angle: f32, other: f32) -> f32 {
+        if (angle + other) < 0.0 {
+            360.0 + other + angle
+        } else if (angle + other) > 360.0 {
+            0.0 + other - (360.0 - angle)
+        } else {
+            angle + other
+        }
     }
 }
