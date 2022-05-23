@@ -1,6 +1,6 @@
 use crate::circle::Circle;
 use eframe::{egui, epi};
-use egui::epaint::PathShape;
+use egui::epaint::{CircleShape, PathShape};
 use fraction::{Fraction, GenericDecimal};
 use std::f32::consts::PI;
 
@@ -93,22 +93,30 @@ impl epi::App for App {
 
             println!("Calculating");
 
-            println!("Pushing circle {:?}", Circle::partial(Fraction::from(1), initial_angle));
+            println!(
+                "Pushing circle {:?}",
+                Circle::partial(Fraction::from(1), initial_angle)
+            );
             let mut circles = vec![Circle::partial(Fraction::from(1), initial_angle)];
+            let left_count;
+            let right_count;
 
             if on_vertex {
                 println!("Calculating left side");
-                self.calculate_circles(&mut circles, Fraction::from(1));
+                left_count = self.calculate_circles(&mut circles, Fraction::from(1));
                 println!("Calculating right side");
-                self.calculate_circles(&mut circles, Fraction::from(1));
+                right_count = self.calculate_circles(&mut circles, Fraction::from(1));
             } else {
-                self.calculate_circles(&mut circles, Fraction::from(self.position));
-                self.calculate_circles(&mut circles, Fraction::from(1) - Fraction::from(self.position));
+                left_count = self.calculate_circles(&mut circles, Fraction::from(self.position));
+                right_count = self.calculate_circles(
+                    &mut circles,
+                    Fraction::from(1) - Fraction::from(self.position),
+                );
             }
             let mut area = Fraction::from(0);
             let circle_count = circles.len();
 
-            for circle in circles {
+            for circle in circles.iter() {
                 area += circle.area();
             }
 
@@ -121,7 +129,7 @@ impl epi::App for App {
             // egui::Frame::canvas(ui.style()).show(ui, |ui| {
             //     self.draw_graphic(ui);
             // });
-            self.draw_graphic(ui);
+            self.draw_graphic(ui, circles, left_count, right_count);
 
             ui.separator();
             egui::warn_if_debug_build(ui);
@@ -130,7 +138,7 @@ impl epi::App for App {
 }
 
 impl App {
-    pub fn calculate_circles(&self, circles: &mut Vec<Circle>, position: Fraction) {
+    pub fn calculate_circles(&self, circles: &mut Vec<Circle>, position: Fraction) -> u32 {
         let outside_angle = Fraction::from(360) / Fraction::from(self.sides);
         let side_length = Fraction::from(2) / Fraction::from(self.sides);
 
@@ -140,41 +148,95 @@ impl App {
         circles.push(circle);
         radius -= side_length;
 
+        let mut circle_count = 1;
+
         println!("Side length: {} | Radius: {}", side_length, radius);
 
         while radius > Fraction::from(0) {
             let circle = Circle::partial(radius, outside_angle);
             println!("Pushing circle {:?}", circle);
             circles.push(circle);
+            circle_count += 1;
             radius -= side_length;
         }
+
+        circle_count
     }
 
-    pub fn draw_graphic(&mut self, ui: &mut egui::Ui) -> egui::Response {
-        let (response, painter) =
-            ui.allocate_painter(egui::Vec2::new(ui.available_width(), 300.0), egui::Sense::hover());
+    pub fn draw_graphic(
+        &mut self,
+        ui: &mut egui::Ui,
+        circles: Vec<Circle>,
+        left_count: u32,
+        right_count: u32,
+    ) -> egui::Response {
+        let (response, painter) = ui.allocate_painter(
+            egui::Vec2::new(ui.available_width(), 400.0),
+            egui::Sense::hover(),
+        );
 
-        self.paint_polygon(&painter, self.sides);
+        let vertices = self.paint_polygon(&painter, self.sides);
+
+        let stroke = egui::Stroke::new(1.0, egui::Color32::RED.linear_multiply(0.25));
+        let outside_angle = 360.0 / self.sides as f32;
+        let inside_angle = 180.0 - outside_angle;
+        let side_length = 50.0 * App::to_rad(outside_angle).sin() / App::to_rad(inside_angle / 2.0).sin();
+        let starting_point = self.calculate_other_point(vertices[0], outside_angle, -side_length * self.position);
+        let radius = side_length * self.sides as f32 / 2.0;
+        let first_circle = CircleShape::stroke(starting_point, radius, stroke);
+        painter.add(first_circle);
+
+        let center = egui::pos2(200.0, 300.0);
+        let mut angle = 90.0;
+
+        println!("Left count {} Right count {}", left_count, right_count);
+
+        for circle in (&circles[1..=left_count as usize]).iter() {
+            angle -= outside_angle;
+            let point = self.calculate_other_point(center, angle, 50.0);
+            let new_radius = (*circle.radius.numer().unwrap() as f32 / *circle.radius.denom().unwrap() as f32) * radius;
+            println!("Radius {}", new_radius);
+            let shape = CircleShape::stroke(point, new_radius, stroke);
+            painter.add(shape);
+        }
+
+        let center = egui::pos2(200.0, 300.0);
+        let mut angle = 90.0;
+        let on_vertex = self.position == 0.0 || self.position == 1.0;
+
+        println!("Left count {} Right count {}", left_count, right_count);
+
+        for circle in (&circles[left_count as usize + 1..]).iter() {
+            if on_vertex { angle += outside_angle; }
+            let point = self.calculate_other_point(center, angle, 50.0);
+            let new_radius = (*circle.radius.numer().unwrap() as f32 / *circle.radius.denom().unwrap() as f32) * radius;
+            println!("Radius {}", new_radius);
+            let shape = CircleShape::stroke(point, new_radius, stroke);
+            painter.add(shape);
+            if !on_vertex { angle += outside_angle; }
+        }
 
         response
     }
 
-    pub fn paint_polygon(&self, painter: &egui::Painter, sides: u32) {
+    pub fn paint_polygon(&self, painter: &egui::Painter, sides: u32) -> Vec<egui::Pos2> {
         let stroke = egui::Stroke::new(1.0, egui::Color32::from_rgb(25, 200, 100));
         let mut points: Vec<egui::Pos2> = Vec::new();
 
         let outside_angle = 360.0 / self.sides as f32;
 
-        let center = egui::pos2(150.0, 300.0);
+        let center = egui::pos2(200.0, 300.0);
         let mut angle = 90.0;
 
         for _ in 0..=sides {
-            let point = self.calculate_other_point(center, angle, 75.0);
+            let point = self.calculate_other_point(center, angle, 50.0);
             points.push(point);
             angle += outside_angle;
         }
 
-        painter.add(PathShape::line(points, stroke));
+        painter.add(PathShape::line(points.clone(), stroke));
+
+        points
     }
 
     fn calculate_other_point(&self, original: egui::Pos2, angle: f32, distance: f32) -> egui::Pos2 {
