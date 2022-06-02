@@ -1,6 +1,6 @@
 use crate::circle::Circle;
 use eframe::{egui, epi};
-use egui::epaint::{CircleShape, PathShape};
+use egui::epaint::{PathShape};
 use fraction::{Fraction, GenericDecimal};
 use std::f32::consts::PI;
 use std::f64::consts::TAU;
@@ -13,6 +13,8 @@ type Decimal = GenericDecimal<u64, u8>;
 pub struct App {
     sides: u32,
     position: f32,
+
+    trim_circles: bool,
     // // this how you opt-out of serialization of a member
     // #[cfg_attr(feature = "persistence", serde(skip))]
     // value: f32,
@@ -23,6 +25,7 @@ impl Default for App {
         Self {
             sides: 3,
             position: 0.0,
+            trim_circles: true,
         }
     }
 }
@@ -80,7 +83,7 @@ impl epi::App for App {
             // ));
 
             ui.add(egui::Slider::new(&mut self.sides, 3..=20).text("sides"));
-            ui.add(egui::Slider::new(&mut self.position, 0.0..=1.0).text("position"));
+            ui.add(egui::Slider::new(&mut self.position, 0.0..=0.99).text("position"));
 
             let outside_angle = Fraction::from(360) / Fraction::from(self.sides);
             let inside_angle = Fraction::from(180) - outside_angle;
@@ -92,26 +95,31 @@ impl epi::App for App {
                 Fraction::from(180)
             };
 
+            let mut calculations = vec![];
+
             println!("Calculating");
 
+            let circle = Circle::partial(Fraction::from(1), initial_angle);
             println!(
                 "Pushing circle {:?}",
-                Circle::partial(Fraction::from(1), initial_angle)
+                circle
             );
+            calculations.push(circle.area_formula());
             let mut circles = vec![Circle::partial(Fraction::from(1), initial_angle)];
             let left_count;
             let right_count;
 
             if on_vertex {
                 println!("Calculating left side");
-                left_count = self.calculate_circles(&mut circles, Fraction::from(1));
+                left_count = self.calculate_circles(&mut circles, Fraction::from(1), &mut calculations);
                 println!("Calculating right side");
-                right_count = self.calculate_circles(&mut circles, Fraction::from(1));
+                right_count = self.calculate_circles(&mut circles, Fraction::from(1), &mut calculations);
             } else {
-                left_count = self.calculate_circles(&mut circles, Fraction::from(self.position));
+                left_count = self.calculate_circles(&mut circles, Fraction::from(self.position), &mut calculations);
                 right_count = self.calculate_circles(
                     &mut circles,
                     Fraction::from(1) - Fraction::from(self.position),
+                    &mut calculations,
                 );
             }
             let mut area = Fraction::from(0);
@@ -122,8 +130,12 @@ impl epi::App for App {
             }
 
             ui.label(format!("Circles: {}", circle_count));
+            ui.label(calculations.join(" + "));
             ui.label(format!("Area: {}", area));
             ui.label(format!("Decimal: {:.5}", Decimal::from_fraction(area)));
+
+            ui.checkbox(&mut self.trim_circles, "Trim Circles");
+
 
             ui.separator();
 
@@ -139,13 +151,14 @@ impl epi::App for App {
 }
 
 impl App {
-    pub fn calculate_circles(&self, circles: &mut Vec<Circle>, position: Fraction) -> u32 {
+    pub fn calculate_circles(&self, circles: &mut Vec<Circle>, position: Fraction, calculations: &mut Vec<String>) -> u32 {
         let outside_angle = Fraction::from(360) / Fraction::from(self.sides);
         let side_length = Fraction::from(2) / Fraction::from(self.sides);
 
         let mut radius = Fraction::from(1) - (position * side_length);
         let circle = Circle::partial(radius, outside_angle);
         println!("Pushing circle {:?}", circle);
+        calculations.push(circle.area_formula());
         circles.push(circle);
         radius -= side_length;
 
@@ -156,6 +169,7 @@ impl App {
         while radius > Fraction::from(0) {
             let circle = Circle::partial(radius, outside_angle);
             println!("Pushing circle {:?}", circle);
+            calculations.push(circle.area_formula());
             circles.push(circle);
             circle_count += 1;
             radius -= side_length;
@@ -178,21 +192,51 @@ impl App {
 
         let vertices = self.paint_polygon(&painter, self.sides);
 
-        let stroke = egui::Stroke::new(1.0, egui::Color32::RED.linear_multiply(0.25));
+        // let stroke = egui::Stroke::new(1.0, egui::Color32::RED.linear_multiply(0.25));
         let outside_angle = 360.0 / self.sides as f32;
         let inside_angle = 180.0 - outside_angle;
         let side_length = 50.0 * App::to_rad(outside_angle).sin() / App::to_rad(inside_angle / 2.0).sin();
-        let starting_point = self.calculate_other_point(vertices[0], outside_angle, -side_length * self.position);
+        let on_vertex = self.position == 0.0 || self.position == 1.0;
+        let circle_middle_angle = if on_vertex { 90.0 } else {
+            (90.0 + (90.0 - outside_angle)) / 2.0
+        };
+        println!("circle middle angle {}", circle_middle_angle);
+        let starting_point = if on_vertex {
+            self.calculate_other_point(vertices[0], self.add_angle(360.0, -outside_angle / 2.0), side_length * self.position)
+        } else {
+            self.calculate_other_point(vertices[0], self.add_angle(360.0, -outside_angle / 2.0), side_length * (1.0 - self.position))
+        };
         let radius = side_length * self.sides as f32 / 2.0;
         let angle = *circles[0].angle.numer().unwrap() as f32 / *circles[0].angle.denom().unwrap() as f32;
         // let first_circle = CircleShape::stroke(starting_point, radius, stroke);
         println!("Angle {}", self.add_angle(-90.0, 150.0));
-        let first_circle = self.circle(starting_point, radius, self.add_angle(90.0, -angle / 2.0), self.add_angle(90.0, angle / 2.0));
+        let mut prev_left_angle = self.add_angle(circle_middle_angle, -angle / 2.0);
+        let mut left_angle;
+        let mut prev_right_angle = self.add_angle(circle_middle_angle, angle / 2.0);
+        let mut right_angle;
+        let color = egui::Color32::RED.linear_multiply(0.75);
+        let first_circle = if self.trim_circles {
+            self.circle(starting_point, radius, prev_left_angle, prev_right_angle, color)
+        } else {
+            self.circle(starting_point, radius, 0.0, 360.0, color)
+        };
+        // let first_circle = self.circle(starting_point, radius, prev_left_angle, prev_right_angle);
         // let first_circle = self.circle(starting_point, radius, 300.0, 90.0);
         painter.add(first_circle);
 
         let center = egui::pos2(200.0, 300.0);
         let mut angle = 90.0;
+
+        let colors = vec![
+            egui::Color32::from_rgb(255, 165, 0).linear_multiply(0.75),
+            egui::Color32::YELLOW.linear_multiply(0.75),
+            egui::Color32::LIGHT_BLUE.linear_multiply(0.75),
+            egui::Color32::BLUE.linear_multiply(0.75),
+            egui::Color32::from_rgb(138, 43, 226).linear_multiply(0.75),
+
+        ];
+
+        let mut using_colors = colors.clone();
 
         println!("Left count {} Right count {}", left_count, right_count);
 
@@ -203,14 +247,27 @@ impl App {
             let new_radius = (*circle.radius.numer().unwrap() as f32 / *circle.radius.denom().unwrap() as f32) * radius;
             println!("Radius {} Angle {} Part {}", new_radius, angle, part);
             // let shape = CircleShape::stroke(point, new_radius, stroke);
-            // let shape = self.circle(point, new_radius, self.add_angle(360.0 + angle - 30.0, -part), 360.0 + angle - 30.0);
-            let shape = self.circle(point, new_radius, 0.0, 360.0);
+            left_angle = prev_left_angle;
+            prev_left_angle = self.add_angle(prev_left_angle, -outside_angle);
+            let shape = if self.trim_circles {
+                let pre = self.circle(point, new_radius, prev_left_angle, left_angle, using_colors[0]);
+                let mut path = pre.points.clone();
+                path.push(point);
+                PathShape::line(path, pre.stroke)
+            } else {
+                self.circle(point, new_radius, 0.0, 360.0, using_colors[0])
+            };
             painter.add(shape);
+            using_colors.remove(0);
+            if using_colors.is_empty() {
+                using_colors = colors.clone();
+            }
         }
 
         let center = egui::pos2(200.0, 300.0);
         let mut angle = 90.0;
         let on_vertex = self.position == 0.0 || self.position == 1.0;
+        using_colors = colors.clone();
 
         println!("Left count {} Right count {}", left_count, right_count);
 
@@ -220,9 +277,24 @@ impl App {
             let new_radius = (*circle.radius.numer().unwrap() as f32 / *circle.radius.denom().unwrap() as f32) * radius;
             println!("Radius {}", new_radius);
             // let shape = CircleShape::stroke(point, new_radius, stroke);
-            let shape = self.circle(point, new_radius, 0.0, 360.0);
+            // let shape = self.circle(point, new_radius, 0.0, 360.0);
+            right_angle = prev_right_angle;
+            prev_right_angle = self.add_angle(prev_right_angle, outside_angle);
+            let shape = if self.trim_circles {
+                let pre = self.circle(point, new_radius, right_angle, prev_right_angle, using_colors[0]);
+                let mut path = pre.points.clone();
+                path.insert(0, point);
+                PathShape::line(path, pre.stroke)
+            } else {
+                self.circle(point, new_radius, 0.0, 360.0, using_colors[0])
+            };
             painter.add(shape);
             if !on_vertex { angle += outside_angle; }
+
+            using_colors.remove(0);
+            if using_colors.is_empty() {
+                using_colors = colors.clone();
+            }
         }
 
         response
@@ -258,20 +330,19 @@ impl App {
         angle * (PI / 180.0)
     }
 
-    fn circle(&self, center: egui::Pos2, radius: f32, start_angle: f32, end_angle: f32) -> PathShape {
-        let stroke = egui::Stroke::new(1.0, egui::Color32::RED.linear_multiply(0.25));
+    fn circle(&self, center: egui::Pos2, radius: f32, start_angle: f32, end_angle: f32, color: egui::Color32) -> PathShape {
+        let stroke = egui::Stroke::new(1.0, color);
         let n = 512;
         let start = ((start_angle / 360.0) * n as f32) as usize;
         let end = ((end_angle / 360.0) * n as f32) as usize;
-        let range;
-        if start_angle > end_angle {
+        let range = if start_angle > end_angle {
             let mut first = (start as usize..=512).collect::<Vec<_>>();
             let second = (0..=end as usize).collect::<Vec<_>>();
             first.extend(second);
-            range = first;
+            first
         } else {
-            range = ((start as usize)..=(end as usize)).collect::<Vec<_>>();
-        }
+            ((start as usize)..=(end as usize)).collect::<Vec<_>>()
+        };
         // let circle: Vec<egui::Pos2> = (start..=end).map(|i| {
         //     let t = egui::remap(i as f64, 0.0..=(n as f64), 0.0..=TAU);
         //     let r = radius as f64;

@@ -26,4 +26,8 @@ impl Circle {
     pub fn partial_area(&self, angle: Fraction) -> Fraction {
         (self.radius * self.radius) * (angle / Fraction::from(360))
     }
+
+    pub fn area_formula(&self) -> String {
+        format!("({})({})²r", self.angle / Fraction::from(360), self.radius)
+    }
 }
