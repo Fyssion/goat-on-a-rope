@@ -214,7 +214,7 @@ impl App {
         let mut left_angle;
         let mut prev_right_angle = self.add_angle(circle_middle_angle, angle / 2.0);
         let mut right_angle;
-        let color = egui::Color32::RED.linear_multiply(0.75);
+        let color = egui::Color32::RED;
         let first_circle = if self.trim_circles {
             self.circle(starting_point, radius, prev_left_angle, prev_right_angle, color)
         } else {
@@ -228,11 +228,11 @@ impl App {
         let mut angle = 90.0;
 
         let colors = vec![
-            egui::Color32::from_rgb(255, 165, 0).linear_multiply(0.75),
-            egui::Color32::YELLOW.linear_multiply(0.75),
-            egui::Color32::LIGHT_BLUE.linear_multiply(0.75),
-            egui::Color32::BLUE.linear_multiply(0.75),
-            egui::Color32::from_rgb(138, 43, 226).linear_multiply(0.75),
+            egui::Color32::from_rgb(255, 165, 0),
+            egui::Color32::YELLOW,
+            egui::Color32::LIGHT_BLUE,
+            egui::Color32::BLUE,
+            egui::Color32::from_rgb(138, 43, 226),
 
         ];
 
