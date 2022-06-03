@@ -59,11 +59,6 @@ impl epi::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &epi::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Goat on a Rope");
-            // ui.hyperlink("https://github.com/emilk/eframe_template");
-            // ui.add(egui::github_link_file!(
-            //     "https://github.com/emilk/eframe_template/blob/master/",
-            //     "Source code."
-            // ));
 
             ui.add(egui::Slider::new(&mut self.sides, 3..=20).text("sides"));
             ui.add(egui::Slider::new(&mut self.position, 0.0..=0.99).text("position"));
@@ -120,6 +115,8 @@ impl epi::App for App {
             self.draw_graphic(ui, circles, left_count);
 
             ui.separator();
+
+            ui.hyperlink_to("Source Code", "https://github.com/Fyssion/goat-on-a-rope");
             egui::warn_if_debug_build(ui);
         });
     }
