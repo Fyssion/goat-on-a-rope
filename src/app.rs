@@ -15,9 +15,6 @@ pub struct App {
     position: f32,
 
     trim_circles: bool,
-    // // this how you opt-out of serialization of a member
-    // #[cfg_attr(feature = "persistence", serde(skip))]
-    // value: f32,
 }
 
 impl Default for App {
@@ -60,20 +57,6 @@ impl epi::App for App {
     /// Called each time the UI needs repainting, which may be many times per second.
     /// Put your widgets into a `Sf32::consts::PIu.
     fn update(&mut self, ctx: &egui::Context, _frame: &epi::Frame) {
-        // Tip: a good default choice is to just keep the `CentralPanel`.
-        // For inspiration and more examples, go to https://emilk.github.io/egui
-
-        // egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-        //     // The top panel is often a good place for a menu bar:
-        //     egui::menu::bar(ui, |ui| {
-        //         ui.menu_button("File", |ui| {
-        //             if ui.button("Quit").clicked() {
-        //                 frame.quit();
-        //             }
-        //         });
-        //     });
-        // });
-
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Goat on a Rope");
             // ui.hyperlink("https://github.com/emilk/eframe_template");
@@ -97,29 +80,22 @@ impl epi::App for App {
 
             let mut calculations = vec![];
 
-            println!("Calculating");
-
             let circle = Circle::partial(Fraction::from(1), initial_angle);
-            println!("Pushing circle {:?}", circle);
             calculations.push(circle.area_formula());
             let mut circles = vec![Circle::partial(Fraction::from(1), initial_angle)];
             let left_count;
-            let right_count;
 
             if on_vertex {
-                println!("Calculating left side");
                 left_count =
                     self.calculate_circles(&mut circles, Fraction::from(1), &mut calculations);
-                println!("Calculating right side");
-                right_count =
-                    self.calculate_circles(&mut circles, Fraction::from(1), &mut calculations);
+                self.calculate_circles(&mut circles, Fraction::from(1), &mut calculations);
             } else {
                 left_count = self.calculate_circles(
                     &mut circles,
                     Fraction::from(self.position),
                     &mut calculations,
                 );
-                right_count = self.calculate_circles(
+                self.calculate_circles(
                     &mut circles,
                     Fraction::from(1) - Fraction::from(self.position),
                     &mut calculations,
@@ -141,10 +117,7 @@ impl epi::App for App {
 
             ui.separator();
 
-            // egui::Frame::canvas(ui.style()).show(ui, |ui| {
-            //     self.draw_graphic(ui);
-            // });
-            self.draw_graphic(ui, circles, left_count, right_count);
+            self.draw_graphic(ui, circles, left_count);
 
             ui.separator();
             egui::warn_if_debug_build(ui);
@@ -164,18 +137,14 @@ impl App {
 
         let mut radius = Fraction::from(1) - (position * side_length);
         let circle = Circle::partial(radius, outside_angle);
-        println!("Pushing circle {:?}", circle);
         calculations.push(circle.area_formula());
         circles.push(circle);
         radius -= side_length;
 
         let mut circle_count = 1;
 
-        println!("Side length: {} | Radius: {}", side_length, radius);
-
         while radius > Fraction::from(0) {
             let circle = Circle::partial(radius, outside_angle);
-            println!("Pushing circle {:?}", circle);
             calculations.push(circle.area_formula());
             circles.push(circle);
             circle_count += 1;
@@ -190,7 +159,6 @@ impl App {
         ui: &mut egui::Ui,
         circles: Vec<Circle>,
         left_count: u32,
-        right_count: u32,
     ) -> egui::Response {
         let (response, painter) = ui.allocate_painter(
             egui::Vec2::new(ui.available_width(), 400.0),
@@ -199,7 +167,6 @@ impl App {
 
         let vertices = self.paint_polygon(&painter, self.sides);
 
-        // let stroke = egui::Stroke::new(1.0, egui::Color32::RED.linear_multiply(0.25));
         let outside_angle = 360.0 / self.sides as f32;
         let inside_angle = 180.0 - outside_angle;
         let side_length =
@@ -210,7 +177,7 @@ impl App {
         } else {
             (90.0 + (90.0 - outside_angle)) / 2.0
         };
-        println!("circle middle angle {}", circle_middle_angle);
+
         let starting_point = if on_vertex {
             self.calculate_other_point(
                 vertices[0],
@@ -227,8 +194,7 @@ impl App {
         let radius = side_length * self.sides as f32 / 2.0;
         let angle =
             *circles[0].angle.numer().unwrap() as f32 / *circles[0].angle.denom().unwrap() as f32;
-        // let first_circle = CircleShape::stroke(starting_point, radius, stroke);
-        println!("Angle {}", self.add_angle(-90.0, 150.0));
+
         let mut prev_left_angle = self.add_angle(circle_middle_angle, -angle / 2.0);
         let mut left_angle;
         let mut prev_right_angle = self.add_angle(circle_middle_angle, angle / 2.0);
@@ -245,8 +211,6 @@ impl App {
         } else {
             self.circle(starting_point, radius, 0.0, 360.0, color)
         };
-        // let first_circle = self.circle(starting_point, radius, prev_left_angle, prev_right_angle);
-        // let first_circle = self.circle(starting_point, radius, 300.0, 90.0);
         painter.add(first_circle);
 
         let center = egui::pos2(200.0, 300.0);
@@ -262,18 +226,12 @@ impl App {
 
         let mut using_colors = colors.clone();
 
-        println!("Left count {} Right count {}", left_count, right_count);
-
         for circle in (&circles[1..=left_count as usize]).iter() {
             angle -= outside_angle;
-            let part =
-                *circle.angle.numer().unwrap() as f32 / *circle.angle.denom().unwrap() as f32;
             let point = self.calculate_other_point(center, angle, 50.0);
             let new_radius = (*circle.radius.numer().unwrap() as f32
                 / *circle.radius.denom().unwrap() as f32)
                 * radius;
-            println!("Radius {} Angle {} Part {}", new_radius, angle, part);
-            // let shape = CircleShape::stroke(point, new_radius, stroke);
             left_angle = prev_left_angle;
             prev_left_angle = self.add_angle(prev_left_angle, -outside_angle);
             let shape = if self.trim_circles {
@@ -302,8 +260,6 @@ impl App {
         let on_vertex = self.position == 0.0 || self.position == 1.0;
         using_colors = colors.clone();
 
-        println!("Left count {} Right count {}", left_count, right_count);
-
         for circle in (&circles[left_count as usize + 1..]).iter() {
             if on_vertex {
                 angle += outside_angle;
@@ -312,9 +268,6 @@ impl App {
             let new_radius = (*circle.radius.numer().unwrap() as f32
                 / *circle.radius.denom().unwrap() as f32)
                 * radius;
-            println!("Radius {}", new_radius);
-            // let shape = CircleShape::stroke(point, new_radius, stroke);
-            // let shape = self.circle(point, new_radius, 0.0, 360.0);
             right_angle = prev_right_angle;
             prev_right_angle = self.add_angle(prev_right_angle, outside_angle);
             let shape = if self.trim_circles {
@@ -395,18 +348,10 @@ impl App {
         } else {
             ((start as usize)..=(end as usize)).collect::<Vec<_>>()
         };
-        // let circle: Vec<egui::Pos2> = (start..=end).map(|i| {
-        //     let t = egui::remap(i as f64, 0.0..=(n as f64), 0.0..=TAU);
-        //     let r = radius as f64;
-        //     egui::pos2(
-        //         (r * t.cos() + center.x as f64) as f32,
-        //         (r * t.sin() + center.y as f64)  as f32,
-        //     )
-        // }).collect();
+
         let mut circle: Vec<egui::Pos2> = Vec::new();
         for i in range {
             let t = egui::remap(i as f64, 0.0..=(n as f64), 0.0..=TAU);
-            // println!("t {}", t);
             let r = radius as f64;
             circle.push(egui::pos2(
                 (r * t.cos() + center.x as f64) as f32,
